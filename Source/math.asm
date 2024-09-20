@@ -1,5 +1,3 @@
-extern VirtualAlloc
-
 _alloc:
 	cmp	eax, dword[rel alloc_data.available]	;check if more data needs allocated
 	jbe	.no_alloc	;if no, then use empty allocated data

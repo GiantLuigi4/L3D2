@@ -6,6 +6,35 @@ term_data: resb 22
 
 extern GetStdHandle
 extern ExitProcess
+extern VirtualAlloc
+extern GetConsoleScreenBufferInfo
+extern WriteConsoleA
+
+; more graceful than using call directly
+; TODO: there is something VERY wrong with this macro
+%macro ABI 1-*
+    %if %0>1
+        %2 rcx, %3
+    %endif
+    %if %0>3
+        %4 rdx, %5
+    %endif
+    %if %0>5
+        %6 r8, %7
+    %endif
+    %if %0>7
+        %8 r9, %9
+    %endif
+    %if %0>9
+        %rotate -1
+        %rep %0 - 8
+            %rotate -1
+            push %1
+        %endrep
+        %rotate -8
+    %endif
+    call %1
+%endmacro
 
 ; cache information required for program to function
 %macro PREP_WINDOWS 0
@@ -25,6 +54,7 @@ extern ExitProcess
     mov rcx, [rel sOut]                 ; load sout handle
 	lea	rdx, [rel term_data]	        ; return to this struct
 	call GetConsoleScreenBufferInfo
+;    ABI GetConsoleScreenBufferInfo, mov, [rel sOut], lea, [rel term_data]
     add rsp, 32
 
     ; copy important information to %1
@@ -35,11 +65,17 @@ extern ExitProcess
 %endmacro
 
 %macro ALLOC_MEMORY 1
+.b:
     sub rsp, 32                          ; Allocate 32 bytes of shadow space
     xor rcx, rcx                         ; allow system to choose address
     mov rdx, %1                          ; size to allocate
     mov r8,  0x3000                      ; Set flAllocationType = MEM_COMMIT | MEM_RESERVE (r8)
     mov r9,  0x40                        ; Set flProtect = PAGE_READWRITE (r9)
     call VirtualAlloc
+
+;    %define flAllocationType 0x3000      ; Set flAllocationType = MEM_COMMIT | MEM_RESERVE
+;    %define flProtect 0x3000             ; Set flProtect = PAGE_READWRITE
+;    ABI VirtualAlloc, xor, rcx, mov, %1, mov, flAllocationType, mov, flProtect
+
     add rsp, 32                          ; Allocate 32 bytes of shadow space
 %endmacro

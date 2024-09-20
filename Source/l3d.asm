@@ -2,8 +2,6 @@
 %include	"data.asm"	;file for data initialisations
 
 %include "win_helper.asm" ; file for windows specific code and utils
-extern GetConsoleScreenBufferInfo
-extern WriteConsoleA
 
 section	.text
 	global	_start
