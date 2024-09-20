@@ -81,12 +81,13 @@ extern WriteConsoleA
 %endmacro
 
 
+; CreateFileA avoids needing to convert to LPCWSTR
+; the C++ code for that conversion alone is intimidating, this file does not need that much complexity if it can be avoided
 extern CreateFileA
 %macro OPEN_FILE 1
     sub rsp, 32                          ; Allocate 32 bytes of shadow space
     lea rcx, %1
     mov rdx, 0x80000000 ; read mode (generic read)
-.a:
     xor r8, r8
     mov r9, 0                         ; optional; don't care
 mov qword [rsp+32   ], 4              ; creation_disposition (always open; creates and open if not exist, elsewise open)
@@ -94,5 +95,4 @@ mov qword [rsp+32+ 8], 0              ; don't care
 mov qword [rsp+32+16], 0              ; don't care
     call CreateFileA
     add rsp, 32                          ; Allocate 32 bytes of shadow space
-.b:
 %endmacro
