@@ -1,5 +1,7 @@
+extern VirtualAlloc
+
 _alloc:
-	cmp	eax, dword[alloc_data.available]	;check if more data needs allocated
+	cmp	eax, dword[rel alloc_data.available]	;check if more data needs allocated
 	jbe	.no_alloc	;if no, then use empty allocated data
 	;----------------------------------------
 	;CALCULATE MINIMUM ALLOCATION SIZE
@@ -9,73 +11,81 @@ _alloc:
 	idiv	rbx	;the actual divide on rax is here
 	inc	rax	;increase so it doesnt allocate 0 bytes
 	imul	rax, 4096	;multiply result by 4096 to get amount to allocate
-	mov	dword[alloc_data.available], eax	;then save this amount here
+	mov	dword[rel alloc_data.available], eax	;then save this amount here
+	mov rsi, 4096
 	;----------------------------------------
 	;ALLOCATE REQUESTED MEMORY
-	mov	rsi, rax	;save page-multiple allocate size here
-	mov	rax, 9	;sys_mmap
-	xor	rdi, rdi	;let kernel choose start addr
-	mov	rdx, 3	;PROT_READ or-ed with PROT_WRITE
-	mov	r10, 0b00100010	;anonymous and private mapping
-	mov	r8, -1	;ignored with anonymous
-	xor	r9, r9	;this one too
-	syscall
+    ALLOC_MEMORY rax
+
+    mov rcx, rax
 	;----------------------------------------
 	;FIX ALLOC DATA STRUCTURE
-	mov	ecx, dword[alloc_data.pointer]	;get pointer for new alloc here
-	mov	qword[alloc_data.addr+rcx], rax	;save start addr to new slot
-	add	dword[alloc_data.pointer], 12	;then increase the pointer
+	mov	ecx, dword[rel alloc_data.pointer]	;get pointer for new alloc here
+
+    ; TODO: why exactly... does push/pop not work here?
+    push rcx
+	lea_offset rcx, [rel alloc_data.addr]
+	mov	qword[rcx], rax	;save start addr to new slot
+	pop rcx
+
+	add	dword[rel alloc_data.pointer], 12	;then increase the pointer
 	lea	rbx, [rcx+8]	;save data length offset here
 	mov	rcx, rax	;save start addr to rcx for later
 	pop	rax	;get back requested data
-	mov	dword[alloc_data.addr+rbx], eax	;move the length allocated here
-	sub	dword[alloc_data.available], eax	;then subtract that from page-size allocated
+
+	lea_offset rbx, [rel alloc_data.addr]
+	mov	dword[rbx], eax	;move the length allocated here
+
+	sub	dword[rel alloc_data.available], eax	;then subtract that from page-size allocated
 	add	rax, rcx	;add the start addr to the requested
-	mov	qword[alloc_data.current], rax	;then that is latest empty allocated data
+	mov	qword[rel alloc_data.current], rax	;then that is latest empty allocated data
 	mov	rax, rcx	;move the start addr into rax for the return
 	ret	;finished!
 .no_alloc:
 	;----------------------------------------
 	;GIVE ADDR FROM PRE_ALLOCATED SPACE
-	mov	ecx, dword[alloc_data.pointer]	;move pointer into rcx
-	mov	dword[alloc_data.addr+rcx+8], eax	;move length into current iten
-	sub	dword[alloc_data.available], eax	;and correct available
-	mov	rax, qword[alloc_data.current]	;move current addr into rax
-	mov	qword[alloc_data.addr+rcx], rax	;and save to addr items
-	add	dword[alloc_data.pointer], 12	;then increase pointer
+	mov	ecx, dword[rel alloc_data.pointer]	;move pointer into rcx
+	; NOTE: [alloc_data.addr+rax] is invalid on windows, so it had to be changed
+	; TODO: this will not work
+	add rcx, [rel alloc_data.addr]
+	mov	dword[rcx+8], eax	;move length into current iten
+	sub	dword[rel alloc_data.available], eax	;and correct available
+	mov	rax, qword[rel alloc_data.current]	;move current addr into rax
+	mov	qword[rcx], rax	;and save to addr items
+	add	dword[rel alloc_data.pointer], 12	;then increase pointer
 	ret	;and return
 
 _barycentric:
 	;----------------------------------------
 	;GET VECTOR V2 = P-v0
-	mov	dword[scratchpad+36], r8d	;save point y addr here
-	mov	dword[scratchpad+32], r9d	;and x addr just before
-	movaps	xmm0, [scratchpad+32]	;now load this addr into xmm0
+	mov	dword[rel scratchpad+36], r8d	;save point y addr here
+	mov	dword[rel scratchpad+32], r9d	;and x addr just before
+	movaps	xmm0, [rel scratchpad+32]	;now load this addr into xmm0
 	psubd	xmm0, xmm5	;subtract v0 to form V2
 	;----------------------------------------
 	;CALCULATE DOTPRODUCT D20
 	movaps	xmm1, xmm0	;duplicate V2 into xmm1
 	pmulld	xmm1, xmm3	;multiply it by V0
 	phaddd	xmm1, xmm1	;and then add horizontal vals together for dp
-	movss	dword[barycentric.w], xmm1	;first val to be multiplied by
-	movss	dword[barycentric.w+12], xmm1	;and also fourth val
+	movss	dword[rel barycentric.w], xmm1	;first val to be multiplied by
+	movss	dword[rel barycentric.w+12], xmm1	;and also fourth val
 	;----------------------------------------
 	;CALCULATE D21
 	pmulld	xmm0, xmm4	;same thing but multiply by V1
 	phaddd	xmm0, xmm0	;and horizontal add again
-	movss	dword[barycentric.w+4], xmm0	;now this is second val to mul
-	movss	dword[barycentric.w+8], xmm0	;and also third
+	movss	dword[rel barycentric.w+4], xmm0	;now this is second val to mul
+	movss	dword[rel barycentric.w+8], xmm0	;and also third
 	;----------------------------------------
 	;CALCULATE BARYCENTRIC V & W
-	movaps	xmm0, [barycentric.v]	;move barycentric v to xmm0
-	movaps	xmm1, [barycentric.w]	;and w to xmm1
+	movaps	xmm0, [rel barycentric.v]	;move barycentric v to xmm0
+	movaps	xmm1, [rel barycentric.w]	;and w to xmm1
 	;xmm0 = {d11 d01 d00 d01}
 	;xmm1 = {d20 d21 d21 d20}
 	pmulld	xmm0, xmm1	;multiply corresponding values
 	;xmm0 = {d11*d20 d01*d21 d00*d21 d01*d20}
 	phsubd	xmm0, xmm1	;and horizontal subtract
 	;xmm0 = {d11*d20-d01*d21 d00*d21 - d01*d20}
-	vbroadcastsd	ymm1, qword[barycentric.denom]	;load dp denom
+	vbroadcastsd	ymm1, qword[rel barycentric.denom]	;load dp denom
 	vcvtdq2pd	ymm0, xmm0	;convert int32 in xmm0 to float64
 	vdivpd	ymm0, ymm1	;divide first two vals by denom
 	vcvtpd2ps	xmm0, ymm0	;convert the doubles to singles
@@ -84,14 +94,14 @@ _barycentric:
 	pshufd	xmm6, xmm0, 0b00010000	;shuffle xmm6 to {v v w 0}
 	pshufd	xmm1, xmm0, 0b00000000	;shuffle xmm1 to {v v v v}
 	pshufd	xmm2, xmm0, 0b01010101	;shuffle xmm2 to {w w w w}
-	movss	xmm0, dword[simd_one]	;now load a 1 into xmm0
+	movss	xmm0, dword[rel simd_one]	;now load a 1 into xmm0
 	subss	xmm0, xmm1	;and subtract both xmm1
 	subss	xmm0, xmm2	;and xmm2 to get u
 	;----------------------------------------
 	;CHECK IF WITHIN TRIANGLE BOUNDS
 	insertps	xmm6, xmm0, 0b00001000	;insert U to form {u v w 0}
-	movaps	xmm7, [simd_one]	;load set of ones
-	movaps	xmm8, [simd_zero]	;and set of zeroes
+	movaps	xmm7, [rel simd_one]	;load set of ones
+	movaps	xmm8, [rel simd_zero]	;and set of zeroes
 	cmpltps	xmm7, xmm6	;compare ones with barycentrics
 	cmpnleps	xmm8, xmm6	;and zeroes with barycentrics
 	movmskps	r12, xmm8	;move the mask to r12
@@ -106,7 +116,7 @@ _create_quat:
 	;----------------------------------------
 	;GET NORMALISED VECTOR
 	movups	xmm0, [rsi]	;load vector into xmm0
-	movups	[quaternion.norm+4], xmm0	;save this to normal addr+4
+	movups	[rel quaternion.norm+4], xmm0	;save this to normal addr+4
 	mov	rsi, quaternion.norm+4	;save addr to rsi
 	call	_normalise_vec	;and then normalise vector in place
 	;----------------------------------------
@@ -116,21 +126,21 @@ _create_quat:
 	fld	dword[rdi]	;load theta (addr in rdi)
 	fdiv	st1	;divide by 2
 	fsincos	;calculate sin(theta/2) (in st1) and cos(theta/2) (st0)
-	fst	dword[quaternion.norm]	;store cos in first normal place
-	fstp	dword[quaternion.conj]	;and conjugated, then pop stack to get sin
-	fst	dword[quaternion.norm+16]	;store the sin at end here
+	fst	dword[rel quaternion.norm]	;store cos in first normal place
+	fstp	dword[rel quaternion.conj]	;and conjugated, then pop stack to get sin
+	fst	dword[rel quaternion.norm+16]	;store the sin at end here
 	fchs	;then negate it
-	fst	dword[quaternion.conj+16]	;and store that at end for conj
+	fst	dword[rel quaternion.conj+16]	;and store that at end for conj
 	emms	;clear fpu stack
 	;----------------------------------------
 	;MULTIPLY VECTOR BY ±SIN(THETA/2)
-	movups	xmm0, [quaternion.norm+4]	;load normalised vector
-	vbroadcastss	xmm1, dword[quaternion.norm+16]	;broadcast sin(theta/2)
-	vbroadcastss	xmm2, dword[quaternion.conj+16]	;and -sin(theta/2)
+	movups	xmm0, [rel quaternion.norm+4]	;load normalised vector
+	vbroadcastss	xmm1, dword[rel quaternion.norm+16]	;broadcast sin(theta/2)
+	vbroadcastss	xmm2, dword[rel quaternion.conj+16]	;and -sin(theta/2)
 	mulps	xmm1, xmm0	;multiply them both by the normalised vector
 	mulps	xmm2, xmm0	;this one the the same but negative
-	movups	[quaternion.norm+4], xmm1	;then save them to the normal
-	movups	[quaternion.conj+4], xmm2	;and conjugated quaternions
+	movups	[rel quaternion.norm+4], xmm1	;then save them to the normal
+	movups	[rel quaternion.conj+4], xmm2	;and conjugated quaternions
 	ret	;done
 
 _get_winding:
@@ -142,7 +152,7 @@ _get_winding:
 	shl	rax, 4	;multiply them all by 16
 	shl	rbx, 4	;this gets face offset from start of object matrix data
 	shl	rcx, 4	;as each matrix row is 16 bytes
-	mov	r8, qword[current.mesh]	;load current mesh addr
+	mov	r8, qword[rel current.mesh]	;load current mesh addr
 	movups	xmm2, [r8+rax]	;with offset calculated load point A into xmm2
 	movups	xmm0, [r8+rbx]	;point B into xmm0
 	movups	xmm1, [r8+rcx]	;and point C into xmm1
@@ -160,14 +170,14 @@ _get_winding:
 	subps	xmm0, xmm1	;sub second round from first to get surface normal
 	;----------------------------------------
 	;DOT PRODUCT WITH CAMERA TO TRI VECTOR
-	movaps	xmm1, [camera.pos]	;load the camera position into xmm1
+	movaps	xmm1, [rel camera.pos]	;load the camera position into xmm1
 	subps	xmm1, xmm2	;and then subtract vertex from earlier for vector
 	dpps	xmm0, xmm1, 0b01110001	;then get 3d dp of normal and camera 
 	;----------------------------------------
 	;CHECK SIGN (WINDING ORDER)
-	movss	dword[scratchpad], xmm0	;store result into scratchpad
+	movss	dword[rel scratchpad], xmm0	;store result into scratchpad
 	mov	rax, 1	;initialise return as clockwise winding
-	test	dword[scratchpad], 0x80000000	;test msb (sign) of result
+	test	dword[rel scratchpad], 0x80000000	;test msb (sign) of result
 	jz	.positive	;if unsigned (bit not set) then clockwise winding
 	sub	rax, 2	;for signed result rax now = -1, anticlockwise winding
 .positive:
@@ -213,38 +223,38 @@ _mat_persp:
 	;CALCULATE 1/(ASPECT*TAN(FOV/2))
 	fld1	;load one
 	fadd	st0	;now add to itself to get 2
-	fld	dword[camera.fov]	;now load the vertical fov
+	fld	dword[rel camera.fov]	;now load the vertical fov
 	fdiv	st1	;and divide it by 2
 	fptan	;then get tan of fov/2, result in st1
-	fild	word[term_size.y]	;load term y
-	fild	word[term_size.x]	;and term x
+	fild	word[rel term_size.y]	;load term y
+	fild	word[rel term_size.x]	;and term x
 	fdiv	st1	;divide x by y to get aspect
 	fmul	st3	;then multiply this by tan(fov/2)
 	fld1	;now load one
 	fdiv	st1	;and divide this by aspect*tan(fov/2)
-	fst	dword[matrix.persp]	;store final result in m00
+	fst	dword[rel matrix.persp]	;store final result in m00
 	;----------------------------------------
 	;CALCULATE 1/TAN(FOV/2)
 	fxch	st4	;load back tan(fov/2)
 	fld1	;get a 1
 	fdiv	st1	;and then get 1/tan(fov/2)
-	fst	dword[matrix.persp+20]	;store in m11
+	fst	dword[rel matrix.persp+20]	;store in m11
 	emms	;clear stack now
 	;----------------------------------------
 	;CALCULATE -(NEAR*FAR)/(FAR-NEAR)
-	fld	dword[camera.near]	;load near plane
-	fld	dword[camera.far]	;and far plane
+	fld	dword[rel camera.near]	;load near plane
+	fld	dword[rel camera.far]	;and far plane
 	fsub	st1	;calculate far-near
-	fld	dword[camera.far]	;load far plane again
+	fld	dword[rel camera.far]	;load far plane again
 	fmul	st2	;multiply by near plane
 	fdiv	st1	;divide near*far by far-near
 	fchs	;negate answer
-	fst	dword[matrix.persp+56]	;and store in m23
+	fst	dword[rel matrix.persp+56]	;and store in m23
 	;----------------------------------------
 	;CALCULATE FAR/(FAR-NEAR)
-	fld	dword[camera.far]	;load far plane
+	fld	dword[rel camera.far]	;load far plane
 	fdiv	st2	;and divide by far-near from earlier
-	fst	dword[matrix.persp+40]	;store in m22
+	fst	dword[rel matrix.persp+40]	;store in m22
 	emms	;clear stack anddd
 	ret	;done!
 
@@ -255,8 +265,8 @@ _mat_view:
 		%assign	INDEX	0	;offset is 0
 		%rep	%0	;16 times...
 			%if	%1!=-1	;if current arg isnt -1,
-				mov	eax, dword[SOURCE+%1]	;load item at offset from source
-				mov	dword[DEST+INDEX], eax	;and put into matrix
+				mov	eax, dword[rel SOURCE+%1]	;load item at offset from source
+				mov	dword[rel DEST+INDEX], eax	;and put into matrix
 			%endif
 			%assign	INDEX	INDEX+4	;then go to next destination place
 			%rotate	1	;and rotate params
@@ -281,10 +291,10 @@ _mat_view:
 		-1, -1, -1, -1	;use macro to create rotation matrix
 	;----------------------------------------
 	;CREATE TRANSLATION MATRIX FROM CAMERA POS
-	movups	xmm1, [camera.pos]	;load position into xmm1
-	movaps	xmm0, [simd_zero]	;load zero set into xmm0
+	movups	xmm1, [rel camera.pos]	;load position into xmm1
+	movaps	xmm0, [rel simd_zero]	;load zero set into xmm0
 	subps	xmm0, xmm1	;subtract position from 0 set (invert sign)
-	movaps	[scratchpad], xmm0	;save to scratchpad
+	movaps	[rel scratchpad], xmm0	;save to scratchpad
 	mat_create	matrix.cam_trans, scratchpad,\
 		-1, -1, -1, -1,\
 		-1, -1, -1, -1,\
@@ -305,14 +315,14 @@ _normalise_vec:
 	;----------------------------------------
 	;CALCULATE SQRT(SUM(SOURCE^2))
 	movups	xmm0, [rsi]	;load source into xmm0
-	andps	xmm0, [vector.bitmask]	;clear last position of junk (4th is 0)
+	andps	xmm0, [rel vector.bitmask]	;clear last position of junk (4th is 0)
 	mulps	xmm0, xmm0	;now square all items by each other
 	times 2	haddps	xmm0, xmm0	;now get sum of all 3 elements
 	sqrtss	xmm0, xmm0	;xmm0 now has sum, get sqrt of this
-	movss	dword[scratchpad], xmm0	;save sqrt to scratchpad
+	movss	dword[rel scratchpad], xmm0	;save sqrt to scratchpad
 	;----------------------------------------
 	;DIVIDE EACH ELEMENT BY SQRT(SUM(SOURCE^2))
-	vbroadcastss	xmm1, dword[scratchpad]	;broadcast this value into xmm1
+	vbroadcastss	xmm1, dword[rel scratchpad]	;broadcast this value into xmm1
 	movups	xmm0, [rsi]	;and now load the original value back
 	divps	xmm0, xmm1	;divide each element by the sqrt of sum of squares
 	movups	[rsi], xmm0	;save that into rdi now
@@ -323,16 +333,18 @@ _normalise_w:
 .loop_normalise:
 	;----------------------------------------
 	;DIVIDE POINTS XYZ BY W COMPONENT
-	cmp	dword[objbuf+rax], MATRIX_DELIMITER	;check if current item is -1
+	; TODO: this will not work
+	add rax, [rel objbuf]
+	cmp	dword[rax], MATRIX_DELIMITER	;check if current item is -1
 	jz	.finish_normalise	;if yes finished
-	movups	xmm0, [objbuf+rax]	;otherwise move all 4 points into xmm0
-	push	qword[objbuf+rax+12]	;save w component
-	vbroadcastss	xmm1, dword[objbuf+rax+12]	;then broadcast w to xmm1
+	movups	xmm0, [rax]	;otherwise move all 4 points into xmm0
+	push	qword[rax+12]	;save w component
+	vbroadcastss	xmm1, dword[rax+12]	;then broadcast w to xmm1
 	divps	xmm0, xmm1	;divide xyzw by wwww
-	movups	[objbuf+rax], xmm0	;then store back into matrix
+	movups	[rax], xmm0	;then store back into matrix
 	;----------------------------------------
 	;CLIP FOR FAR AND NEAR PLANES
-	fld	dword[objbuf+rax+8]	;load ndc z coord
+	fld	dword[rax+8]	;load ndc z coord
 	fld1	;load a 1
 	fcomi	st1	;compare against ndc z
 	jb	.clip_obj	;if 1 is below then clip entire obj
@@ -340,11 +352,11 @@ _normalise_w:
 	fcomi	st1	;compare against z again
 	ja	.clip_obj	;if its above then clip entire obj again
 	emms	;clear stack
-	pop	qword[objbuf+rax+12]	;restore w from earlier
+	pop	qword[rax+12]	;restore w from earlier
 	add	rax, 16	;add 16 to go to next row
 	jmp	.loop_normalise	;and loop over
 .clip_obj:
-	pop	qword[objbuf+rax+12]	;restore w from earlier
+	pop	qword[rax+12]	;restore w from earlier
 	emms	;clear stack
 	mov	rax, -1	;move clip signal into rax
 .finish_normalise:
@@ -362,7 +374,7 @@ _quatmul:
 		vbroadcastss	xmm1, dword[rsi+%1]	;load scalar imaginary part into xmm1
 		shufps	xmm2, xmm2, %2	;shuffle operand quat to match equation
 		mulps	xmm1, xmm2	;multiply together
-		xorps	xmm1, [quaternion.mulmask_%3]	;now negate certain values
+		xorps	xmm1, [rel quaternion.mulmask_%3]	;now negate certain values
 		addps	xmm0, xmm1	;and add to xmm0
 	%endmacro
 	;----------------------------------------
@@ -377,26 +389,26 @@ _sample_texture:
 	;----------------------------------------
 	;CLAMP UV COORDINATES
 	insertps	xmm1, xmm2, 0b00010000	;xmm1 is now {u v 0 0}
-	movaps	xmm15, [simd_one]	;load simd 1
+	movaps	xmm15, [rel simd_one]	;load simd 1
 	minps	xmm1, xmm15	;and get minimum to clamp to 1
-	movaps	xmm15, [simd_zero]	;and then load 0
+	movaps	xmm15, [rel simd_zero]	;and then load 0
 	maxps	xmm1, xmm15	;then get max to clamp to 0
 	;----------------------------------------
 	;CONVERT UV TO TEXTURE COORDINATES
-	movaps	xmm15, [current.t_simd]	;load texture coord simd into xmm15
+	movaps	xmm15, [rel current.t_simd]	;load texture coord simd into xmm15
 	mulps	xmm1, xmm15	;and then multiply by xmm1 to get texture coords
 	cvtps2dq	xmm1, xmm1	;convert values to int32
-	movss	dword[scratchpad+32], xmm1	;then save u to scratchpad
+	movss	dword[rel scratchpad+32], xmm1	;then save u to scratchpad
 	pshufd	xmm1, xmm1, 0b00000001	;shuffle so first val is v
-	movss	dword[scratchpad+36], xmm1	;then store v onto scratchpad
+	movss	dword[rel scratchpad+36], xmm1	;then store v onto scratchpad
 	;----------------------------------------
 	;CONVERT TEXTURE COORDS TO ADDRESS
-	mov	eax, dword[scratchpad+36]	;fetch v coords
-	imul	rax, qword[current.t_width]	;multiply them by texture width
-	mov	r12d, dword[scratchpad+32]	;fetch u coords
+	mov	eax, dword[rel scratchpad+36]	;fetch v coords
+	imul	rax, qword[rel current.t_width]	;multiply them by texture width
+	mov	r12d, dword[rel scratchpad+32]	;fetch u coords
 	imul	r12, 3	;multiply that by 3 (texture size)
 	lea	rax, [rax+r12+4]	;rax is now equal to offset for pixel col
-	add	rax, qword[current.texture]	;add texture addr
+	add	rax, qword[rel current.texture]	;add texture addr
 	ret	;finished!
 
 _trans_viewport:
@@ -410,14 +422,14 @@ _trans_viewport:
 	fld1
 	fadd	st1
 	fdiv	st2
-	fild	word[term_size+6]
+	fild	word[rel term_size+6]
 	fmul	st1
 	fist	dword[rdi+rax]
 	fld	dword[rdi+rax+4]
 	fld1
 	fsub	st1
 	fdiv	st5
-	fild	word[term_size+4]
+	fild	word[rel term_size+4]
 	fmul	st1
 	fist	dword[rdi+rax+4]
 	emms

@@ -13,18 +13,18 @@ _load_l3d:
 	syscall
 	;----------------------------------------
 	;ALLOCATE MEMORY FOR FILE DATA
-	mov	eax, dword[file.size+4]	;load the unpacked data into rax
+	mov	eax, dword[rel file.size+4]	;load the unpacked data into rax
 	call	_alloc	;then allocate that amount
 	mov	r15, rax	;save the addr to r15
 	xor	rax, rax	;another sys_read call
 	mov	rdi, r14	;to the fd
 	mov	rsi, r15	;and write the data to the new memory
-	mov	edx, dword[file.size]	;read the packed size
+	mov	edx, dword[rel file.size]	;read the packed size
 	syscall
 	;----------------------------------------
 	;GO TO END OF FILE DATA AND INSERT TERMINATORS
-	mov	edi, dword[file.size+4]	;load unpacked size here into destination
-	mov	esi, dword[file.size]	;and packed size here for source
+	mov	edi, dword[rel file.size+4]	;load unpacked size here into destination
+	mov	esi, dword[rel file.size]	;and packed size here for source
 	sub	edi, 8	;subtract 8 here, go to last face position
 	sub	esi, 6	;subtract 6 here (3x word) bc no terminating word
 	mov	word[r15+rdi+6], 65535	;insert terminating word into end of data
@@ -76,7 +76,7 @@ _load_ltx:
 	syscall
 	;----------------------------------------
 	;CORRECT FILESIZE AND ALLOC SPACE
-	mov	eax, dword[file.size]	;then save into rax
+	mov	eax, dword[rel file.size]	;then save into rax
 	sub	rax, 4	;subtract dimension size from rax
 	imul	rax, 3	;multiply length by 3 (bytes to unpacked size)
 	add	rax, 4	;add back on dimension size
@@ -90,7 +90,7 @@ _load_ltx:
 	xor	rax, rax	;then sys_read again
 	mov	rdi, r14	;read from open file
 	mov	rsi, r15	;read data into the allocated data
-	mov	edx, dword[file.size]	;use filesize as length
+	mov	edx, dword[rel file.size]	;use filesize as length
 	sub	rdx, 4	;but expand it to be 2 bytes per pixel
 	shl	rdx, 1	;because old file used to be 1 per pixel
 	add	rdx, 4	;but then transparency bytes added
@@ -152,12 +152,12 @@ _load_luv:
 	syscall
 	;----------------------------------------
 	;ALLOCATE SPACE FOR FILE AND READ
-	mov	eax, dword[file.size]	;load length into rax
+	mov	eax, dword[rel file.size]	;load length into rax
 	call	_alloc	;and then allocate that amount of data
 	mov	rsi, rax	;read all data into this addr now
 	xor	rax, rax	;then sys_read
 	mov	rdi, r14	;read from open file again
-	mov	edx, dword[file.size]	;and read the rest of the file
+	mov	edx, dword[rel file.size]	;and read the rest of the file
 	syscall
 	mov	rax, 3	;sys_close now
 	mov	rdi, r14	;close the open file

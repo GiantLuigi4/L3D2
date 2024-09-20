@@ -1,7 +1,7 @@
 _input_main:
 	;-----------------------------------------------
 	;CHECK IF ARROWS AND TEST WASD
-	cmp	byte[scratchpad], 27	;check if first byte is escape
+	cmp	byte[rel scratchpad], 27	;check if first byte is escape
 	jz	.test_arrows	;if yes test for arrows
 	cmp	MOVE_F	;otherwise test normal keys (wasd)
 	jz	.move_f	;MOVE_F/B/L/R are macros that do the comparison to the key
@@ -29,7 +29,7 @@ _input_main:
 	jz	.look_right
 	;-----------------------------------------------
 	;CHECK DEBUG KEYBINDS
-	cmp	byte[status.debug], 1	;check if debug is on
+	cmp	byte[rel status.debug], 1	;check if debug is on
 	jnz	.ret	;if no then dont check debug binds
 	cmp	F1	;otherwise check f1 key
 	jz	.debug_f1	;and if pressed then...
@@ -38,18 +38,18 @@ _input_main:
 .ret:
 	ret	;if it was none of the above again return doing nothing
 .debug_f1:
-	neg	byte[status.wireframe]	;toggle wireframe mode
+	neg	byte[rel status.wireframe]	;toggle wireframe mode
 	ret
 .debug_f2:
-	neg	byte[status.backfaces]
+	neg	byte[rel status.backfaces]
 	ret
 .look_up:
 	;-----------------------------------------------
 	;MACROS FOR LOOKING IN CERTAIN DIRECTION
 	%macro	rotate_unit	1
-		mov	dword[scratchpad], 0	;clear real component of new quat
-		movups	xmm0, [%1]	;move point to rotate into xmm0
-		movups	[scratchpad+4], xmm0	;then insert that as imaginary part
+		mov	dword[rel scratchpad], 0	;clear real component of new quat
+		movups	xmm0, [rel %1]	;move point to rotate into xmm0
+		movups	[rel scratchpad+4], xmm0	;then insert that as imaginary part
 		mov	rsi, quaternion.norm	;now multiply normal quat
 		mov	rdx, scratchpad	;by this point
 		mov	rdi, scratchpad+20	;and store result here
@@ -58,8 +58,8 @@ _input_main:
 		mov	rdx, quaternion.conj	;by conjugate quat
 		mov	rdi, scratchpad+40	;and store here
 		call	_quatmul	;multiply again
-		movups	xmm0, [scratchpad+44]	;then save this to xmm0
-		movups	[%1], xmm0	;and insert that into point to rotate
+		movups	xmm0, [rel scratchpad+44]	;then save this to xmm0
+		movups	[rel %1], xmm0	;and insert that into point to rotate
 	%endmacro
 	%macro	look_dir	4
 		mov	rsi, camera.%1	;use this vector
@@ -84,12 +84,12 @@ _input_main:
 	;-----------------------------------------------
 	;MACRO FOR MOVING ALONG UNIT VECTOR
 	%macro	move_uvec	3
-		movups	xmm1, [%2]	;move unit vector into xmm1
-		vbroadcastss	xmm0, dword[camera.speed]	;broadcast speed multiplier
+		movups	xmm1, [rel %2]	;move unit vector into xmm1
+		vbroadcastss	xmm0, dword[rel camera.speed]	;broadcast speed multiplier
 		mulps	xmm1, xmm0	;multiply unit vector by speed
-		movups	xmm0, [%1]	;now load position into xmm0
+		movups	xmm0, [rel %1]	;now load position into xmm0
 		%3ps	xmm0, xmm1	;add/subtract new vector to/from position
-		movups	[%1], xmm0	;now save as new position
+		movups	[rel %1], xmm0	;now save as new position
 	%endmacro
 	;-----------------------------------------------
 	;MOVE CAMERA ALONG FORWARD VECTOR
