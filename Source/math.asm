@@ -20,7 +20,6 @@ _alloc:
 	;FIX ALLOC DATA STRUCTURE
 	mov	ecx, dword[rel alloc_data.pointer]	;get pointer for new alloc here
 
-    ; TODO: why exactly... does push/pop not work here?
     push rcx
 	lea_offset rcx, [rel alloc_data.addr]
 	mov	qword[rcx], rax	;save start addr to new slot

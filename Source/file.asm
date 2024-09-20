@@ -1,10 +1,7 @@
 _load_l3d:
 	;----------------------------------------
 	;OPEN FILE AND GET UNPACKED + PACKED SIZE
-	mov	rdi, rax	;move file buffer addr into rdi for sys_open
-	mov	rax, 2	;sys_open
-	xor	rsi, rsi	;reset flags because its not needed here
-	syscall
+	OPEN_FILE [rel rax]
 	mov	r14, rax	;save fd to r14
 	xor	rax, rax	;sys_read
 	mov	rdi, r14	;use the opened fd

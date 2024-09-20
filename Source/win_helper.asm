@@ -79,3 +79,18 @@ extern WriteConsoleA
 
     add rsp, 32                          ; Allocate 32 bytes of shadow space
 %endmacro
+
+
+extern CreateFile2
+%macro OPEN_FILE 1
+    sub rsp, 40                          ; Allocate 32 bytes of shadow space
+    lea rcx, %1
+    mov rdx, 0x80000000 ; read mode (generic read)
+.a:
+    xor r8, r8
+    mov r9, 4 ; creation_disposition (always open; creates and open if not exist, elsewise open)
+mov qword [rsp+32], 0              ; Optional fifth argument: extended parameters (NULL)
+    call CreateFile2
+    add rsp, 40                          ; Allocate 32 bytes of shadow space
+.b:
+%endmacro
