@@ -6,7 +6,6 @@ bytes_read: dd 0
 term_data: resb 22
 
 extern ExitProcess
-extern WriteConsoleA
 
 ; more graceful than using call directly
 ; TODO: there is something VERY wrong with this macro
@@ -140,4 +139,26 @@ extern CloseHandle
     lea rcx, %1 ; handle
     call CloseHandle
     add rsp, 32                          ; Reset stack
+%endmacro
+
+extern WriteConsoleA
+%macro PRINT 2 ; str, len
+    ; save reg state
+    push rcx
+    push r8
+    push r9
+        sub rsp, 32          ; adjust stack ptr
+        mov qword rax, [rel sOut]   ; load sout handle
+
+        ; print to console
+        mov r9, 0                   ; no pointer to store the number of characters written
+        mov rdx, %1                 ; load string
+        mov r8, %2                  ; load str length
+        mov rcx, rax                ; move stdout handle to rcx
+        call WriteConsoleA
+        add rsp, 32          ; correct stack ptr (program segfaults on even numbers of prints elsewise)
+    ; load reg state
+    pop r9
+    pop r8
+    pop rcx
 %endmacro

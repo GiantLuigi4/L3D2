@@ -329,11 +329,11 @@ _normalise_vec:
 
 _normalise_w:
 	xor	rax, rax	;reset rax for counter
+	lea rax, [rel objbuf]
 .loop_normalise:
 	;----------------------------------------
 	;DIVIDE POINTS XYZ BY W COMPONENT
 	; TODO: this will not work
-	add rax, [rel objbuf]
 	cmp	dword[rax], MATRIX_DELIMITER	;check if current item is -1
 	jz	.finish_normalise	;if yes finished
 	movups	xmm0, [rax]	;otherwise move all 4 points into xmm0

@@ -138,11 +138,12 @@ _start:
 	;----------------------------------------
 	;PRINT FRAMEBUFFER
 .print_fbuf:
-	mov	rax, 1	;sys_write
-	mov	rdi, 1	;write to stdout
-	mov	rsi, qword[rel FRAMEBUFFER]	;framebuffer addr start
-	mov	edx, dword[rel FRAMEBUFFER+8]	;and length in following dword
-	syscall
+    PRINT qword[rel FRAMEBUFFER], qword[rel FRAMEBUFFER+8]
+;	mov	rax, 1	;sys_write
+;	mov	rdi, 1	;write to stdout
+;	mov	rsi, qword[rel FRAMEBUFFER]	;framebuffer addr start
+;	mov	edx, dword[rel FRAMEBUFFER+8]	;and length in following dword
+;	syscall
 	;----------------------------------------
 	;HANDLE AVAILABLE INPUT
 	xor	rax, rax	;sys_read

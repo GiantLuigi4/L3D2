@@ -129,10 +129,11 @@ _draw_textures:
 	mov	rax, rsi	;load the current face offset into rax
 	shl	rax, 2	;multiply by 4 (8 bytes per vertex rather than 2)
 	mov	rdi, qword[rel current.uv]	;and then load uv address into rdi
-	; TODO: port
-;	vbroadcastsd	ymm0, qword[rdi+rax]	;xmm0 is now {u, v0 u0 v0}
-;	vbroadcastsd	ymm10, qword[rdi+rax+8]	;xmm10 is now {u1 v1 u1 v1}
-;	vbroadcastsd	ymm11, qword[rdi+rax+16]	;and xmm11 is... yeah
+	; TODO: check
+lea_offset rdi, [rax]
+	vbroadcastsd	ymm0, qword[rdi]	;xmm0 is now {u, v0 u0 v0}
+	vbroadcastsd	ymm10, qword[rdi+8]	;xmm10 is now {u1 v1 u1 v1}
+	vbroadcastsd	ymm11, qword[rdi+16]	;and xmm11 is... yeah
 	pshufd	xmm10, xmm10, 0b10010000	;xmm10 is now {u1 u1 v1 u1}
 	pshufd	xmm11, xmm11, 0b10010000	;xmm11 is now {u2 u2 v2 u2}
 	insertps	xmm11, xmm10, 0b10010000	;xmm11 = {u2 v1 v2 u2}
@@ -150,13 +151,14 @@ _draw_textures:
 
     ; NOTE: [objbuf+rax] is invalid on windows, so it had to be changed
     ; TODO: this will not work
-	add rax, [rel objbuf]
+;	add rax, [rel objbuf]
+lea_offset rax, [rel objbuf]
 	movaps	xmm5, [rax]	;load vertex data for point A
-	add rbx, [rel objbuf]
+lea_offset rbx, [rel objbuf]
 	movaps	xmm3, [rbx]	;point B
-	add rcx, [rel objbuf]
-
+lea_offset rcx, [rel objbuf]
 	movaps	xmm4, [rcx]	;and point C
+
 	insertps	xmm0, xmm5, 0b11000000	;xmm0 = {w0 0 0 0}
 	insertps	xmm0, xmm3, 0b11010000	;xmm0 = {w0 w1 0 0}
 	insertps	xmm0, xmm4, 0b11100000	;xmm0 = {w0 w1 w2 0}
