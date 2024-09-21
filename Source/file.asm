@@ -3,21 +3,18 @@ _load_l3d:
 	;OPEN FILE AND GET UNPACKED + PACKED SIZE
 	OPEN_FILE [rel rax]
 	mov	r14, rax	;save fd to r14
-	xor	rax, rax	;sys_read
-	mov	rdi, r14	;use the opened fd
-	mov	rsi, file.size	;save first qword to filesize
-	mov	rdx, 8	;read first qword
-	syscall
+	READ_FILE [rel r14], [rel file.size], 8
+
 	;----------------------------------------
 	;ALLOCATE MEMORY FOR FILE DATA
 	mov	eax, dword[rel file.size+4]	;load the unpacked data into rax
 	call	_alloc	;then allocate that amount
-	mov	r15, rax	;save the addr to r15
-	xor	rax, rax	;another sys_read call
-	mov	rdi, r14	;to the fd
-	mov	rsi, r15	;and write the data to the new memory
-	mov	edx, dword[rel file.size]	;read the packed size
-	syscall
+	mov r15, rax
+	xor rax, rax
+	READ_FILE [rel r14], [rel r15], [rel file.size]
+
+    lea r15, [r15]
+
 	;----------------------------------------
 	;GO TO END OF FILE DATA AND INSERT TERMINATORS
 	mov	edi, dword[rel file.size+4]	;load unpacked size here into destination
@@ -53,24 +50,16 @@ _load_l3d:
 	sub	rdi, 16
 	jmp	.loop_vertices	;loop over
 .finish_load:
-	mov	rax, 3	;sys_close
-	mov	rdi, r14	;fd from the start
-	syscall
+	CLOSE_FILE [rel r14]
 	ret	;finished!
 
 _load_ltx:
 	;----------------------------------------
-	;OPEN FILE AND GET SIZE
-	mov	rdi, rax	;move addr provided to rdi
-	mov	rax, 2	;use sys_open
-	xor	rsi, rsi	;and xor this for opening (read)
-	syscall
+	;OPEN FILE AND GET UNPACKED + PACKED SIZE
+	OPEN_FILE [rel rax]
 	mov	r14, rax	;save fd to r14
-	xor	rax, rax	;then use sys_read
-	mov	rdi, r14	;read from new file
-	mov	rsi, file.size	;store here
-	mov	rdx, 4	;and read file size
-	syscall
+	READ_FILE [rel r14], [rel file.size], 4
+
 	;----------------------------------------
 	;CORRECT FILESIZE AND ALLOC SPACE
 	mov	eax, dword[rel file.size]	;then save into rax
@@ -85,13 +74,14 @@ _load_ltx:
 	;READ REST OF FILE WITH CORRECT FILESIZE
 	mov	r15, rax	;save addr to r15
 	xor	rax, rax	;then sys_read again
-	mov	rdi, r14	;read from open file
-	mov	rsi, r15	;read data into the allocated data
 	mov	edx, dword[rel file.size]	;use filesize as length
 	sub	rdx, 4	;but expand it to be 2 bytes per pixel
 	shl	rdx, 1	;because old file used to be 1 per pixel
 	add	rdx, 4	;but then transparency bytes added
-	syscall
+	mov r9, rdx
+    READ_FILE [rel r14], [rel r15], r9
+    mov rdx, r9
+
 	pop	rdi	;get back end addr of unpacked pixel data
 	add	rdi, r15	;add on allocated data addr
 	lea	rsi, [r15+rax-2]	;use data read in rax to find end of pixel data
@@ -102,7 +92,7 @@ _load_ltx:
 	cmp	rdi, r15	;check if rdi is finished unpacking
 	jz	.finish_convert	;if yes finish conversion
 	xor	rdx, rdx	;otherwise clear rdx so it doesnt fuck idiv
-	movzx	rax, byte[rsi]	;move colour byte into rax 
+	movzx	rax, byte[rsi]	;move colour byte into rax
 	mov	cl, byte[rsi+1]	;and save transparency byte to rcx
 	mov	rbx, 10	;move 10 into rbx
 	idiv	rbx	;and then div int col by 10
@@ -129,34 +119,22 @@ _load_ltx:
 .finish_convert:
 	;----------------------------------------
 	;CLOSE FILE
-	mov	rax, 3	;sys_close
-	mov	rdi, r14	;fd from the start
-	syscall
+	CLOSE_FILE [rel r14]
 	ret	;and finished!
 
 _load_luv:
 	;----------------------------------------
 	;OPEN FILE AND GET FILE LENGTH
-	mov	rdi, rax	;move file string to rdi
-	mov	rax, 2	;use sys_open
-	xor	rsi, rsi	;reset rsi for reading file
-	syscall
+	OPEN_FILE [rel rax]
 	mov	r14, rax	;save fd to r14
-	xor	rax, rax	;sys_read now
-	mov	rdi, r14	;read from open file
-	mov	rsi, file.size	;and read data into here
-	mov	rdx, 4	;use 4 bytes for file length
-	syscall
+	READ_FILE [rel r14], [rel file.size], 4
 	;----------------------------------------
 	;ALLOCATE SPACE FOR FILE AND READ
 	mov	eax, dword[rel file.size]	;load length into rax
 	call	_alloc	;and then allocate that amount of data
 	mov	rsi, rax	;read all data into this addr now
 	xor	rax, rax	;then sys_read
-	mov	rdi, r14	;read from open file again
-	mov	edx, dword[rel file.size]	;and read the rest of the file
-	syscall
-	mov	rax, 3	;sys_close now
-	mov	rdi, r14	;close the open file
-	syscall
+	READ_FILE [rel r14], [rel rsi], [rel file.size]
+
+	CLOSE_FILE [rel r14]
 	ret	;and done!

@@ -1,13 +1,11 @@
-      section .data ; sys_stor
-sOut:      dq 0
+       section .data ; sys_stor
+sOut:       dq 0
+bytes_read: dd 0
 
     section .bss
 term_data: resb 22
 
-extern GetStdHandle
 extern ExitProcess
-extern VirtualAlloc
-extern GetConsoleScreenBufferInfo
 extern WriteConsoleA
 
 ; more graceful than using call directly
@@ -37,6 +35,7 @@ extern WriteConsoleA
 %endmacro
 
 ; cache information required for program to function
+extern GetStdHandle
 %macro PREP_WINDOWS 0
     push rcx
     	sub rsp, 32
@@ -49,6 +48,7 @@ extern WriteConsoleA
     pop rcx
 %endmacro
 
+extern GetConsoleScreenBufferInfo
 %macro TERM_SIZE 1
     sub rsp, 32
     mov rcx, [rel sOut]                 ; load sout handle
@@ -64,8 +64,8 @@ extern WriteConsoleA
     mov word[rel %1.y], ax
 %endmacro
 
+extern VirtualAlloc
 %macro ALLOC_MEMORY 1
-.b:
     sub rsp, 32                          ; Allocate 32 bytes of shadow space
     xor rcx, rcx                         ; allow system to choose address
     mov rdx, %1                          ; size to allocate
@@ -77,7 +77,7 @@ extern WriteConsoleA
 ;    %define flProtect 0x3000             ; Set flProtect = PAGE_READWRITE
 ;    ABI VirtualAlloc, xor, rcx, mov, %1, mov, flAllocationType, mov, flProtect
 
-    add rsp, 32                          ; Allocate 32 bytes of shadow space
+    add rsp, 32                          ; Reset stack
 %endmacro
 
 
@@ -90,9 +90,54 @@ extern CreateFileA
     mov rdx, 0x80000000 ; read mode (generic read)
     xor r8, r8
     mov r9, 0                         ; optional; don't care
+
+sub rsp, 24                          ; Allocate 32 bytes of shadow space
 mov qword [rsp+32   ], 4              ; creation_disposition (always open; creates and open if not exist, elsewise open)
 mov qword [rsp+32+ 8], 0              ; don't care
 mov qword [rsp+32+16], 0              ; don't care
     call CreateFileA
-    add rsp, 32                          ; Allocate 32 bytes of shadow space
+add rsp, 24                          ; Reset stack
+
+    add rsp, 32                          ; Reset stack
+%endmacro
+
+
+extern GetFileSize
+%macro FILE_SIZE 1
+    sub rsp, 32                          ; Allocate 32 bytes of shadow space
+    lea rcx, %1
+    xor rdx, rdx
+    call GetFileSize
+    add rsp, 32                          ; Reset stack
+%endmacro
+
+
+extern ReadFile
+; file handle is %1
+;   file data is %2
+;   read size is %3
+%macro READ_FILE 3
+    sub rsp, 32                          ; Allocate 32 bytes of shadow space
+
+    lea rcx, %1 ; handle
+    lea rdx, %2 ; buffer
+    mov  r8, %3 ; size
+    lea  r9, [rel bytes_read]
+sub rsp, 48                          ; Reset stack
+mov qword [rsp+ 0], 0              ; ensure stack is clear
+mov qword [rsp+ 8], 0              ; ensure stack is clear
+mov qword [rsp+16], 0              ; ensure stack is clear
+mov qword [rsp+24], 0              ; ensure stack is clear
+mov qword [rsp+32], 0              ; lpOverlapped; don't care
+call ReadFile
+add rsp, 48                          ; Reset stack
+    add rsp, 32                          ; Reset stack
+%endmacro
+
+extern CloseHandle
+%macro CLOSE_FILE 1
+    sub rsp, 32                          ; Allocate 32 bytes of shadow space
+    lea rcx, %1 ; handle
+    call CloseHandle
+    add rsp, 32                          ; Reset stack
 %endmacro

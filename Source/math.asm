@@ -26,7 +26,8 @@ _alloc:
 	pop rcx
 
 	add	dword[rel alloc_data.pointer], 12	;then increase the pointer
-	lea	rbx, [rcx+8]	;save data length offset here
+	; TODO: mov or lea?
+	lea	rbx, qword[rcx+8]	;save data length offset here
 	mov	rcx, rax	;save start addr to rcx for later
 	pop	rax	;get back requested data
 
@@ -42,14 +43,15 @@ _alloc:
 	;----------------------------------------
 	;GIVE ADDR FROM PRE_ALLOCATED SPACE
 	mov	ecx, dword[rel alloc_data.pointer]	;move pointer into rcx
-	; NOTE: [alloc_data.addr+rax] is invalid on windows, so it had to be changed
-	; TODO: this will not work
-	add rcx, [rel alloc_data.addr]
-	mov	dword[rcx+8], eax	;move length into current iten
+	lea_offset rcx, [rel alloc_data.addr]
+	add rcx, 8
+	mov	dword[rcx], eax	;move length into current iten
 	sub	dword[rel alloc_data.available], eax	;and correct available
 	mov	rax, qword[rel alloc_data.current]	;move current addr into rax
+	sub rcx, 8
 	mov	qword[rcx], rax	;and save to addr items
 	add	dword[rel alloc_data.pointer], 12	;then increase pointer
+
 	ret	;and return
 
 _barycentric:
